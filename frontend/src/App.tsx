@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import './App.css'
 
 // Access browser SpeechRecognition implementation
@@ -28,7 +28,8 @@ function App() {
     addMessage('user', transcript);
 
     // Send to backend
-    fetch('/api/chat', {
+    const API_URL = 'http://localhost:8000/api/chat';
+    fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: transcript }),
@@ -74,6 +75,13 @@ function App() {
     recognitionRef.current = recognition;
   };
 
+  // Auto scroll chat to bottom when messages update
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
   return (
     <div className="App">
       <h1>Голосовой ассистент</h1>
@@ -81,11 +89,12 @@ function App() {
 
       <div className="chat-window">
         {messages.map((m: Message, idx: number) => (
-          <div key={idx} className={m.role}>
+          <div key={idx} className={`message ${m.role}`}>
             <strong>{m.role === 'user' ? 'Вы: ' : 'ИИ: '}</strong>
             {m.content}
           </div>
         ))}
+        <div ref={chatEndRef} />
       </div>
     </div>
   )
