@@ -14,8 +14,6 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const recognitionRef = useRef<any | null>(null);
 
-  const API_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8000/api/chat';
-
   const addMessage = (role: 'user' | 'assistant', content: string) => {
     setMessages((prev: Message[]) => [...prev, { role, content }]);
   };
@@ -30,7 +28,7 @@ function App() {
     addMessage('user', transcript);
 
     // Send to backend
-    fetch(API_URL, {
+    fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: transcript }),
@@ -53,7 +51,6 @@ function App() {
       alert('SpeechRecognition API не поддерживается вашим браузером');
       return;
     }
-    
 
     const recognition = new SpeechRecognition();
     recognition.lang = 'ru-RU';
@@ -84,7 +81,8 @@ function App() {
 
       <div className="chat-window">
         {messages.map((m: Message, idx: number) => (
-          <div key={idx} className={`message ${m.role}`}>
+          <div key={idx} className={m.role}>
+            <strong>{m.role === 'user' ? 'Вы: ' : 'ИИ: '}</strong>
             {m.content}
           </div>
         ))}
