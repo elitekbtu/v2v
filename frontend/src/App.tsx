@@ -53,6 +53,7 @@ function App() {
       alert('SpeechRecognition API не поддерживается вашим браузером');
       return;
     }
+    
 
     const recognition = new SpeechRecognition();
     recognition.lang = 'ru-RU';
