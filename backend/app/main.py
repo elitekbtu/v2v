@@ -4,6 +4,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 import os
 import openai
+from typing import List
+
+from .models import Base, ChatSession, ChatMessage
+from . import schemas as sch
 
 # Load configuration from environment variables
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./dev.db")
@@ -14,8 +18,11 @@ if OPENAI_API_KEY:
     openai.api_key = OPENAI_API_KEY
 
 # SQLAlchemy setup
-engine = create_engine(DATABASE_URL, echo=True, future=True)
+engine = create_engine(DATABASE_URL, echo=False, future=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Ensure tables exist (for demo; in production prefer Alembic migrations)
+Base.metadata.create_all(bind=engine)
 
 # FastAPI app
 app = FastAPI(title="v2v API", version="0.1.0")
@@ -47,25 +54,41 @@ async def api_root():
     """Simple health-check endpoint."""
     return {"status": "ok"}
 
-# ------------------ Chat endpoint ------------------
+# ------------------ Session & Chat endpoints ------------------
 
-from pydantic import BaseModel
+@app.post("/api/session", response_model=sch.Session)
+async def create_session(db: Session = Depends(get_db)):
+    new_sess = ChatSession()
+    db.add(new_sess)
+    db.commit()
+    db.refresh(new_sess)
+    return new_sess
 
+@app.get("/api/session", response_model=List[sch.Session])
+async def list_sessions(db: Session = Depends(get_db)):
+    return db.query(ChatSession).order_by(ChatSession.created_at.desc()).all()
 
-class ChatRequest(BaseModel):
-    message: str
+@app.get("/api/session/{session_id}", response_model=sch.SessionWithMessages)
+async def get_session(session_id: int, db: Session = Depends(get_db)):
+    sess = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+    if not sess:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return sess
 
-
-class ChatResponse(BaseModel):
-    response: str
-
-
-@app.post("/api/chat", response_model=ChatResponse)
-async def chat_endpoint(payload: ChatRequest):
-    """Simple chat endpoint backed by OpenAI if available, otherwise echo."""
+@app.post("/api/chat", response_model=sch.ChatResponse)
+async def chat_endpoint(payload: sch.CreateChatRequest, db: Session = Depends(get_db)):
     user_message = payload.message.strip()
-    if not user_message:
-        raise HTTPException(status_code=400, detail="Message cannot be empty")
+
+    # get or create session
+    if payload.session_id:
+        session_obj = db.query(ChatSession).filter(ChatSession.id == payload.session_id).first()
+        if not session_obj:
+            raise HTTPException(status_code=404, detail="Session not found")
+    else:
+        session_obj = ChatSession()
+        db.add(session_obj)
+        db.commit()
+        db.refresh(session_obj)
 
     if not OPENAI_API_KEY:
         raise HTTPException(status_code=503, detail="OpenAI API key not configured on server")
@@ -79,13 +102,20 @@ async def chat_endpoint(payload: ChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    return ChatResponse(response=bot_reply)
+    # Store messages
+    db.add_all([
+        ChatMessage(session_id=session_obj.id, role="user", content=user_message),
+        ChatMessage(session_id=session_obj.id, role="assistant", content=bot_reply),
+    ])
+    db.commit()
+
+    return sch.ChatResponse(response=bot_reply, session_id=session_obj.id)
 
 # Optional convenience GET endpoint: /api/gpt?message=...
-@app.get("/api/gpt", response_model=ChatResponse)
-async def gpt_get(message: str = ""):
+@app.get("/api/gpt", response_model=sch.ChatResponse)
+async def gpt_get(message: str = "", db: Session = Depends(get_db)):
     """GET wrapper around chat endpoint for quick tests."""
     if not message.strip():
         raise HTTPException(status_code=400, detail="message query param required")
 
-    return await chat_endpoint(ChatRequest(message=message)) 
+    return await chat_endpoint(sch.CreateChatRequest(message=message), db) 
