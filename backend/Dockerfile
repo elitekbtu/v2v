@@ -4,7 +4,8 @@ WORKDIR /app
 
 # Install Python dependencies
 COPY requirements.txt ./
-RUN pip install -r requirements.txt
+ENV PIP_DEFAULT_TIMEOUT=100
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
