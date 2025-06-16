@@ -31,7 +31,9 @@ app = FastAPI(title="v2v API", version="0.1.0")
 origins = [
     "http://localhost",
     "http://localhost:3000",
-    "https://localhost",
+    "https://localhost"
+    "https://206.189.61.37/"
+    ,
 ]
 app.add_middleware(
     CORSMiddleware,
