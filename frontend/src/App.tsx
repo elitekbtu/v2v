@@ -19,7 +19,7 @@ function App() {
   const recognitionRef = useRef<any | null>(null)
   const speechSynthesisRef = useRef<SpeechSynthesisUtterance | null>(null)
 
-  const API_BASE = 'http://localhost:8000/api'
+  const API_BASE = 'https://159.89.17.67:8000/api'
 
   // Fetch sessions on mount
   useEffect(() => {
